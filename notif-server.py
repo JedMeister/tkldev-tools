@@ -1,9 +1,11 @@
 import socketserver
+from argparse import ArgumentParser
 import struct
 import json
 from subprocess import check_call
 import notify2
 import sys
+import common
 
 urgency_map = {
     'low': notify2.URGENCY_LOW,
@@ -17,7 +19,8 @@ def notify(summary='', body='', urgency='low', expire_time=None, app_name='',
     notification = notify2.Notification(summary, body)#, icon)
     if urgency:
         if not urgency in urgency_map:
-            sys.stderr.write('Unknown urgency "%s"' % urgency)
+            error('Unknown urgency "{}" given'.format(urgency))
+            info('valid urgencies are ("low", "normal" or "critical")')
         else:
             notification.set_urgency(urgency_map[urgency])
     if not expire_time is None:
@@ -39,11 +42,20 @@ class NotifSock(socketserver.BaseRequestHandler):
         # self.request is the TCP socket connected to the client
         size = struct.unpack('Q', self.request.recv(8))[0]
         self.data = json.loads(self.request.recv(size))
-
+        common.info('{} -> {}'.format(self.client_address, self.data))
         notify(**self.data)
 
 if __name__ == "__main__":
-    HOST, PORT = "", 9999
+    parser = ArgumentParser()
+    parser.add_argument('-b', '--host', default='')
+    parser.add_argument('-p', '--port', default=9999, type=int)
+    parser.add_argument('-v', '--verbosity', default='warning', choices =
+            common.VERBOSITIES)
+    args = parser.parse_args()
+
+    HOST, PORT = args.host, args.port
+
+    common.set_verbosity(args.verbosity)
 
     # Create the server, binding to localhost on port 9999
     server = socketserver.TCPServer((HOST, PORT), NotifSock)
