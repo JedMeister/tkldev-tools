@@ -8,6 +8,7 @@ from subprocess import Popen
 from time import time
 from glob import glob
 import common
+from datetime import timedelta
 
 stamps_directory = join(getcwd(), 'stamps')
 stamp_order = ('bootstrap', 'root.spec', 'root.build', 'root.patched', 'root.sandbox',
@@ -53,6 +54,8 @@ if stamps:
 else:
     highest_stamp = 'None'
 
+time_elapsed = timedelta(seconds=after-before)
+
 data = json.dumps({
     'urgency': config['urgency_bad'] if ret else config['urgency_good'],
     'expire_time': config['expire_time'],
@@ -61,7 +64,7 @@ data = json.dumps({
     'category': config['category'],
     'summary': (config['summary_bad'] if ret else
         config['summary_good']).format(exit_code = ret),
-    'body': config['body'].format(time_elapsed=after-before,
+    'body': config['body'].format(time_elapsed=str(time_elapsed),
         highest_stamp=highest_stamp),
 }).encode('utf8')
 
