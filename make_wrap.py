@@ -6,11 +6,13 @@ from os.path import basename, isdir, isfile, dirname, abspath, join
 from os import getcwd
 from subprocess import Popen
 from time import time
+from glob import glob
 import common
 
-stamps_directory = isdir(join(getcwd(), 'stamps'))
-stamp_order = ('bootstrap', 'root.build', 'root.patched', 'root.sandbox',
+stamps_directory = join(getcwd(), 'stamps')
+stamp_order = ('bootstrap', 'root.spec', 'root.build', 'root.patched', 'root.sandbox',
                'cdroot', 'product.iso')
+
 prog_dir = dirname(abspath(__file__))
 default_config_path = join(prog_dir, 'conf', 'make_wrap_default_config.json')
 config_path = join(prog_dir, 'conf', 'make_wrap_config.json')
@@ -43,6 +45,13 @@ proc = Popen(args)
 ret = proc.wait()
 after = time()
 
+stamps = list(map(basename, glob(join(stamps_directory, '*'))))
+if isfile(join(getcwd(), 'product.iso')):
+    stamps.append('product.iso')
+if stamps:
+    highest_stamp = sorted(stamps, lambda x: stamp_order.index(x))[:-1]
+else:
+    highest_stamp = 'None'
 
 data = json.dumps({
     'urgency': config['urgency_bad'] if ret else config['urgency_good'],
@@ -52,7 +61,8 @@ data = json.dumps({
     'category': config['category'],
     'summary': (config['summary_bad'] if ret else
         config['summary_good']).format(exit_code = ret),
-    'body': 'Took {:.2} seconds'.format(after-before),
+    'body': config['body'].format(time_elapsed=after-before,
+        highest_stamp=highest_stamp),
 }).encode('utf8')
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

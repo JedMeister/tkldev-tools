@@ -10,5 +10,5 @@
     "expire_time": 0,
     "summary_bad": "Fail ({exit_code})",
     "summary_good": "Success",
-    "body": "Took {time_elapsed} seconds and reached stamp {}"
+    "body": "Took {time_elapsed:.2} seconds and reached stamp {highest_stamp}"
 }
