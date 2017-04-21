@@ -1,35 +1,58 @@
-
-
 import sys
 import socket
 import struct
 import json
-from os.path import basename
+from os.path import basename, isdir, isfile, dirname, abspath, join
 from os import getcwd
 from subprocess import Popen
 from time import time
+import common
 
-HOST, PORT = ('192.168.1.89', 9999)
+stamps_directory = isdir(join(getcwd(), 'stamps'))
+stamp_order = ('bootstrap', 'root.build', 'root.patched', 'root.sandbox',
+               'cdroot', 'product.iso')
+prog_dir = dirname(abspath(__file__))
+default_config_path = join(prog_dir, 'conf', 'make_wrap_default_config.json')
+config_path = join(prog_dir, 'conf', 'make_wrap_config.json')
 
-title = socket.gethostname() + ':' + basename(getcwd())
-args = ['make'] + sys.argv[1:]
+if not isfile(config_path):
+    common.warning("No config found, creating one from defaults")
+    if not isfile(default_config_path):
+        common.fatal("No default config found!")
+    else:
+        with open(default_config_path, 'r') as fob1:
+            with open(config_path, 'w') as fob2:
+                fob2.write(fob1.read())
+            fob1.seek(0)
+            config = json.load(fob1)
+else:
+    with open(config_path, 'r') as fob1:
+        config = json.load(fob1)
+
+HOST = config['host']
+PORT = config['port']
+
+title = config["app_name"].format(hostname=socket.gethostname(),
+        current_dir=basename(getcwd()))
+args = [config['make_cmd']] + sys.argv[1:]
 
 before = time()
 
 proc = Popen(args)
 #XXX Proc throws CalledProcess error sometimes, but isn't handled
 ret = proc.wait()
-
 after = time()
 
+
 data = json.dumps({
-    'urgency': 'critical' if ret else 'normal',
-    'expire_time': 0,
+    'urgency': config['urgency_bad'] if ret else config['urgency_good'],
+    'expire_time': config['expire_time'],
     'app_name': title,
-    'icon': None,
-    'category': None,
-    'summary': 'Fail' if ret else 'Success',
-    'body': 'Took %.2f seconds' % (after-before),
+    'icon': config['icon'],
+    'category': config['category'],
+    'summary': (config['summary_bad'] if ret else
+        config['summary_good']).format(exit_code = ret),
+    'body': 'Took {:.2} seconds'.format(after-before),
 }).encode('utf8')
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

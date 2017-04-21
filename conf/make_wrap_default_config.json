@@ -1,0 +1,14 @@
+{
+    "host": "",
+    "port": 9999,
+    "urgency_bad": "critical",
+    "urgency_good": "critical",
+    "app_name": "{hostname}:{current_dir}",
+    "make_cmd": "make",
+    "icon": null,
+    "category": null,
+    "expire_time": 0,
+    "summary_bad": "Fail ({exit_code})",
+    "summary_good": "Success",
+    "body": "Took {time_elapsed} seconds and reached stamp {}"
+}
