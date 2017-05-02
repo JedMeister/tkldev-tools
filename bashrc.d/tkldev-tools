@@ -1,0 +1,10 @@
+# tkldev-changelog
+
+export DEBFULLNAME="Jeremy Davis"
+export DEBEMAIL="jeremy@turnkeylinux.org"
+export EXTRA_TEXT="/turnkey/fab/products/common-changes"
+
+# tkldev-clone
+
+export ORIGIN=jedmeister
+
