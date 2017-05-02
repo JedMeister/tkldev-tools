@@ -1,4 +1,4 @@
-#/bin/bash -e
+#!/bin/bash -e
 # Copyright (c) 2017 TurnKey GNU/Linux - http://www.turnkeylinux.org
 # 
 # tkldev-clone
