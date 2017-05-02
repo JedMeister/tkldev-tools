@@ -1,0 +1,109 @@
+#/bin/bash -e
+# Copyright (c) 2017 TurnKey GNU/Linux - http://www.turnkeylinux.org
+# 
+# tkldev-clone
+# ------------
+# A tool to easily clone turnkey appliance source code from GitHub.
+#
+# This file is part of tkldev-tools.
+# 
+# tkldev-tools is free software; you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+# option) any later version.
+
+fatal() { echo "FATAL [$(basename $0)]: $@" 1>&2; exit 1; }
+warning() { echo "WARNING [$(basename $0)]: $@"; }
+info() { echo "INFO [$(basename $0)]: $@"; }
+
+usage() {
+cat<<EOF
+Syntax: $(basename $0) appliance-name
+
+When run anywhere on tkldev, this script will clone an appliance repo to a
+local directory in /turnkey/fab/products/appliance-name. 
+
+It also adjusts the git remotes so that TurnKey repo becomes 'turnkey' and 
+'origin' becomes your GitHub fork of the repo. Please note though; it won't 
+create it on Github if it doesn't exist. You'll still need to fork the relevant
+appliance on GitHub if you wish to push your changes). 
+
+If the directory already exists, then it will do the remotes adjustment as 
+above. It will then checkout 'master', pull from TurnKey, and push back to
+your forked repo on GitHub (assuming that it exists).
+
+Once all that is done, it drops you in a new shell inside the directory.
+
+Note: as it opens a new shell, extended usage (without killing all the 
+additional subshells) may cause performance issues over time. If you work 
+within an SSH session, you may need to exit multiple times to escape...
+
+Prerequisites:
+
+    GitHub account      - optional, but useful if you want to hack on it!
+    SSH GH push access  - optional, but currently only supported push method
+
+Arguments::
+
+    appliance-name      - e.g., core
+
+Environment::
+
+    ORIGIN              - GitHub username to use for the origin repo
+    DEVDEBUG            - turn on debugging
+
+Future plans:
+
+    - develop some neater way of dropping you into the right dir, without 
+      spawning mass subshells...
+    - leverage octhub to create the initial fork on GH?
+    - support for HTTPS GH auth?
+
+EOF
+exit 1
+}
+
+[ -z "$ORIGIN" ] && \
+    warning "ORIGIN variable not set, you won't be able to push"
+
+PROD=/turnkey/fab/products
+TKL=git@github.com:turnkeylinux-apps
+USR=git@github.com:$ORIGIN
+
+adjust_remotes() {
+    remotes="$(git remote -v)"
+    origin="$(grep origin <<< "${remotes}" | head -1)"
+    turnkey="$(grep ${TKL} <<< "${remotes}" | head -1)"
+    if [ "${origin}" = "${turnkey}" ]; then
+        git remote rename origin turnkey
+        git remote add origin ${USR}/${APP}.git
+    else
+        git remote set-url origin ${USR}/${APP}.git
+        git remote add turnkey ${TKL}/${APP}.git
+    fi
+}
+
+[ -z "$1" ] && fatal "appliance name must be specified"
+
+APP=$(echo $1 | sed "s|/||g")
+APP_DIR=$PROD/$APP
+
+if [ -d "$APP_DIR" ]; then
+    info "directory exists already; checking for updates and adjusting remotes"
+    cd $APP_DIR
+    [[ -n $(git status -s) ]] && fatal "repo has uncommited changes"
+    adjust_remotes
+    git checkout master
+    git pull turnkey master
+    git push origin master
+else
+    info "directory doesn't exist; attempting to clone and adjusting remotes"
+    cd $PROD
+    git clone ${TKL}/${APP}.git ${APP_DIR}
+    cd ${APP_DIR}
+    adjust_remotes
+    git push origin master
+fi
+
+cd ${APP_DIR}
+exec bash

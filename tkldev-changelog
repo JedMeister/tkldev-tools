@@ -1,0 +1,78 @@
+#!/bin/bash -e
+# Copyright (c) 2017 TurnKey GNU/Linux - http://www.turnkeylinux.org
+# 
+# tkldev-changelog
+# ----------------
+# A tool to easily update turnkey appliance changelogs
+#
+# This file is part of tkldev-tools.
+# 
+# tkldev-tools is free software; you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+# option) any later version.
+
+fatal() { echo "FATAL [$(basename $0)]: $@" 1>&2; exit 1; }
+warning() { echo "WARNING [$(basename $0)]: $@"; }
+info() { echo "INFO [$(basename $0)]: $@"; }
+
+usage() {
+cat<<EOF
+Syntax: $(basename $0) appliance-name
+When run in the root directory of an appliance's source code, this script will
+create a new changelog entry at the top of an existing changelog file & opens
+the file for editing in vim.
+
+Prerequisites:
+
+    devscripts (debian package - hard dependency)
+    vim (debian package - optional; vim-tiny is pre-installed and will work)
+    configured local tz-data (optional - otherwise will fall back to UTC)
+
+Arguments::
+
+    appliance-name      - e.g., core
+
+Environment::
+
+    DEBFULLNAME         - full name of operator e.g. "Joe Bloggs"
+    FULLNAME            - full name of operator (if DEBFULLNAME not set)
+    DEBEMAIL            - email address of operator e.g. "joe@blogs.com"
+    EMAIL               - email address of operator (if DEBEMAIL not set)
+    EXTRA_TEXT          - additional changelog points to include in new entry
+                          if not set; then by default it will read from 
+                          "/turnkey/fab/products/common-changes"
+    DEVDEBUG            - turn on debugging
+
+Future plans:
+
+    - create new changelog (probably via switch?)
+    - support specifiying a path (currently must be run in root of appliance
+      source code)
+    - do something better with the EXTRA_TEXT (e.g. include in common?)
+    - support alternate text editors?
+
+EOF
+exit 1
+}
+
+which dch || fatal "dch not found; please install 'devscripts'"
+[ -z "$EXTRA_TEXT" ] && EXTRA_TEXT=/turnkey/fab/products/common-changes
+[ -f changelog ] || fatal "no changelog in local dir"
+
+APP=$(basename $PWD)
+
+OLD_VER=$(head -1 changelog | cut -d' ' -f1 | sed "s|^.*${APP}-||")
+MAJ="$(echo ${OLD_VER} | cut -d. -f1)"
+MIN="$(( $(echo ${OLD_VER} | cut -d. -f2) +1 ))"
+NEW_VER=${MAJ}.${MIN}
+
+NAME="turnkey-${APP}-${NEW_VER}"
+
+dch --changelog changelog --release-heuristic log --package $NAME --newversion 1 --force-distribution turnkey --urgency low
+
+sed -i "3s|\*.*|\* |" changelog
+sed -e "4r ${EXTRA_TEXT}" -i changelog
+
+vim "+call cursor(3, 7)" changelog
+
