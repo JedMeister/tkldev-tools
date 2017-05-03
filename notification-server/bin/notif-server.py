@@ -4,7 +4,17 @@ import struct
 import json
 from subprocess import check_call
 import notify2
+from os import readlink
+from os.path import abspath, join, dirname, islink
 import sys
+
+# Make sure common is in python path
+if islink(abspath(__file__)):
+    lib = join(dirname(abspath(readlink(abspath(__file__)))), "lib"))
+else:
+    lib = join(dirname(abspath(__file__)), "lib")
+sys.path.append(lib)
+
 import common
 
 urgency_map = {

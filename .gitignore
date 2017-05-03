@@ -1,2 +1,11 @@
+# Don't commit real config
 notification-server/conf/make_wrap_config.json
+
+# Python 3 build cache
 __pycache__
+
+# Python 2 build cache
+*.pyc
+
+# Vim swap files
+.*.swp
