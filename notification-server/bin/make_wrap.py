@@ -2,11 +2,19 @@ import sys
 import socket
 import struct
 import json
-from os.path import basename, isdir, isfile, dirname, abspath, join
-from os import getcwd
+from os.path import basename, isdir, isfile, dirname, abspath, join, islink
+from os import getcwd, readlink
 from subprocess import Popen
 from time import time
 from glob import glob
+
+# Make sure common is in python path
+if islink(abspath(__file__)):
+    lib = join(dirname(abspath(readlink(abspath(__file__)))), "lib"))
+else:
+    lib = join(dirname(abspath(__file__)), "lib")
+sys.path.append(lib)
+
 import common
 from datetime import timedelta
 
