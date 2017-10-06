@@ -1,0 +1,88 @@
+#!/bin/bash -e
+# script to check a plan (or plans) to see if the packages are avaiable
+
+# accepts path to plan; defaults to plan/main
+
+if [ -z $1 ]; then
+    PLAN="plan/main"
+else
+    unset PLAN
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -a) PLAN="$(find /turnkey/fab/products /turnkey/fab/common -maxdepth 4 -type f -path '*/plan*')"
+                break
+                ;;
+            -u) apt-get update;;
+            -x) set -x;;
+	        --)	shift; break;;
+	        -*)
+                echo >&2 "usage:";
+                echo >&2 \
+                "       $(basename $0) [-a] [-u] [-x] [<path(s)>]"
+                echo >&2; echo >&2 \
+                "   <none>  check plan/main (assumes that you are in products/<appliance>)"
+                echo >&2 \
+                "       -a  check all plans from /turnkey/fab/{common,products}" 
+                echo >&2 \
+                "       -u  update package lists ('apt-get udpate')"
+                echo >&2 \
+                "       -x  debug mode"
+                echo >&2 \
+                "<path(s)>  file(s) &/or directory(ies) to process (full or relative path)"
+                echo >&2; echo >&2 \
+                "   FILES: all files are processed as if they are a plan"
+                echo >&2; echo >&2 \
+                "   DIRS: path or filename must include "plan" to be included"
+                echo >&2 \
+                "       only files within a directory will be included"
+                echo >&2 \
+                "               (sub dirs are not processed)"
+
+		        exit 1;;
+        	*)	break;;		# terminate while loop
+        esac
+    shift
+    done
+fi
+
+if [ -z "$PLAN" ]; then
+    while [ $# -gt 0 ]; do
+        if [ -f "$1" ]; then
+            echo "plan start: $PLAN"
+            PLAN="$PLAN"$'\n'"$1"
+            echo "plan finish: $PLAN"
+        else
+            FILES="$(find $(readlink -f $1) -maxdepth 1 -type f | grep plan)"
+            PLAN="$PLANi"$'\n'"$FILES"
+        fi
+	shift
+    done
+	[ -z "$PLAN" ] && echo "No valid plans" && exit 1
+fi
+
+# sed stuff for reference
+# '/#/d' - remove every line which contains the '#' character
+# 's/\s.*$//' - remove everything after a space
+# '/^\s*$/d'- remove blank lines (inc lines with whitespace)
+
+#PLAN="$(echo "$PLAN" | tr " " "\n")"
+echo "plan: $PLAN"
+unset PKGS
+while read LINE; do
+    echo "line: $LINE"
+    unset BROKEN
+    if [ ! -z $LINE ]; then
+        PKGS="$(cat $LINE | sed  '/#/d' | sed 's/\/\*.*$//' | sed '/^\s*$/d')"
+        echo "pkgs: $PKGS"
+        PATTERN="E:"
+        BROKEN="$(apt-get install -s $PKGS 2>&1 | grep "$PATTERN" | sed "s/$PATTERN //")"
+        echo "broken: $BROKEN :broken"
+    if [ ! -z "$BROKEN" ]; then
+        echo "## From $LINE these packages have issues:"
+        echo "$BROKEN"
+    fi
+done <<<"$PLAN"
+
+echo "####"
+echo "Done"
+
