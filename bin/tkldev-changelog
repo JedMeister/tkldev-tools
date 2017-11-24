@@ -57,7 +57,7 @@ exit 1
 }
 
 which dch > /dev/null || fatal "dch not found; please install 'devscripts'"
-which vim ? /dev/null || fatal "vim not found; call yourself a developer?!?"
+which vim > /dev/null || fatal "vim not found; call yourself a developer?!?"
 [ -z "$EXTRA_TEXT" ] && EXTRA_TEXT=/turnkey/fab/products/common-changes
 [ -f changelog ] || fatal "no changelog in local dir"
 
