@@ -1,0 +1,6 @@
+#!/bin/bash -e
+
+pool-unregister $@
+pool-gc
+pool-register $@
+pool-info | grep $@
