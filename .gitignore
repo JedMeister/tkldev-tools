@@ -9,3 +9,4 @@ __pycache__
 
 # Vim swap files
 .*.swp
+etc/conf
