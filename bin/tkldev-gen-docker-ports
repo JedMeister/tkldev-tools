@@ -1,0 +1,193 @@
+#!/bin/bash -e
+
+CONF=/etc/tkldev-tools/conf
+. ${CONF}
+. ${LIB_DIR}/bash-common
+
+[[ -z ${DEVDEBUG} ]] || set-debug
+[[ -n ${FAB_PATH} ]] || fatal "FAB_PATH not set"
+
+export PRODUCTS_DIR=${PRODUCTS_DIR:-${FAB_PATH}/products}
+export OUT_FILE=${OUT_FILE:-/mnt/docker.ports}
+export BLACKLIST_APPS=${BLACKLIST_APPS:-"lxc docker youphptube"}
+
+usage() {
+cat<<EOF
+
+Syntax: $(basename $0) [-h|--help]
+        $(basename $0) [-f|--file FILE_WITH_LIST_OF_APPS] [-o|--output OUTPUT_FILE] \\
+                [APP_NAME [APP_NAME ...]] [-b|--blacklist APP_NAME [APP_NAME ...]]
+
+This script will generate 'docker.ports' information. By default (i.e. no
+options) all directories within the PRODUCTS_DIR will be processed.
+
+Depending on options, this info will be output to a file (default with no
+options/arguments) or STDOUT (if APP_NAMEs given as arguements).
+
+The returned info is in the form of:
+
+    <APP_NAME>: <TCP_PORT> [<TCP_PORT> ...] [<UDP_PORT>/udp [<UDP_PORT>/udp ...]]
+
+E.g.:
+
+    openldap: 22 80 389 443 636 12320 12321 389/udp 636/udp
+
+Prerequisites::
+
+    FAB_PATH:       - Usually already set on TKLDev - default is ${FAB_PATH}
+
+    TurnKey appliance buildcode. This is expected to reside in a subdirectory of
+    PRODUCTS_DIR.
+
+Environment::
+
+    DEVDEBUG        - Turn on debugging.
+    PRODUCTS_DIR    - Set the base directory where TurnKey appliance buildcode can
+                      be found.
+                      Default: ${PRODUCTS_DIR}
+    OUT_FILE        - File to output to. Can also be set via -o|--output switch
+                      Note: the OUT_FILE envvar will be ignored if the -o|--output
+                      switch is used.
+                      Default: ${OUT_FILE}
+    BLACKLIST_APPS  - Space separated list of APPs in PRODUCTS_DIR to NOT process.
+                      Note: default BLACKLIST_APPS is overridden; if you wish to add
+                      APPs to the default, use -b|--blacklist APP instead.
+                      Default: "${BLACKLIST_APPS}"
+
+Arguments::
+
+    -h|--help       - Print this help and exit.
+    -b|--blacklist  - Space separated list of APPs to be excluded; added to
+                      BLACKLIST_APPS. MUST be used as last option (all following
+                      arguments interpreted as APPs to blacklist).
+    -f|--file       - File containing line separated list of APPs to process.
+    -o|--output     - File to output to; if not set defaults to ${OUT_FILE}.
+                      Note: Overrides OUT_FILE envvar.
+
+    APP_NAME        - Specific APP (or space separated list of APPs) to process.
+                      When used, output goes to STDOUT. OUT_FILE (if set) and
+                      -o|--output (if used) are ignored.
+
+EOF
+exit 1
+}
+
+find-includes() {
+    test_file=${1}
+    grep ^include ${test_file} | grep -v turnkey.mk | sed "s|include.*\$(FAB_PATH)|$FAB_PATH|"
+}
+
+find-makefiles() {
+    base_file=${1}
+    include=$(find-includes ${base_file})
+    unset includes
+    while true; do
+        if [[ -n ${include} ]]; then
+            for file in ${include}; do
+                includes="${includes} ${file}"
+                include=$(find-includes ${file})
+            done
+        else
+            break
+        fi
+    done
+    echo ${includes}
+}
+
+sort-ports() {
+    ports=${@}
+    echo ${ports} | tr ' ' '\n' | sort -g | tr '\n' ' '
+}
+
+get-ports() {
+    app=${1}
+    if [[ ${app} = ${PRODUCTS_DIR} ]]; then
+        return
+    elif [[ ${BLACKLIST_APPS} = *$(basename ${app})* ]]; then
+        return
+    else
+        makefile=${app}/Makefile
+        makefiles="${makefile} $(find-makefiles ${makefile})"
+        unset TCP UDP
+        for file in ${makefiles}; do
+            tcp=$(grep FW_TCP ${file} | sed "s|.*= ||")
+            [[ -z ${tcp} ]] || TCP="${TCP} ${tcp}"
+        done
+        for file in ${makefiles}; do
+            udp=$(grep FW_UDP ${file} | sed "s|.*= ||; s|\([0-9]*\)|\1/udp|g")
+            [[ -z ${udp} ]] || UDP="${UDP} ${udp}"
+        done
+        if [[ -z ${TCP} ]]; then
+            TCP=" 22 80 443 12320 12321" 
+        else
+            TCP=" "$(sort-ports ${TCP})
+        fi
+        [[ -z ${UDP} ]] || UDP=" "$(sort-ports ${UDP})
+        echo "$(basename ${app}):${TCP}${UDP}" | tr -s ' '
+    fi
+}
+
+process-app() {
+    app=${1}
+    app=${PRODUCTS_DIR}/${app}
+    if [[ -f ${app}/Makefile ]]; then
+        get-ports ${app}
+    else
+        warning "${app}/Makefile not found; skipping"
+    fi
+}
+
+process-apps() {
+    for app in ${@}; do
+        app_ports=$(process-app ${app})
+        [[ -z ${app_ports} ]] || echo ${app_ports} >> ${OUT_FILE}
+    done
+}
+
+process-all() {
+    in_file=${1}
+    if [[ -z ${in_file} ]]; then
+        apps=$(find ${PRODUCTS_DIR} -maxdepth 1 -type d | sort)
+    else
+        apps=$(read_file ${in_file} | sort)
+    fi
+	if [[ -f ${OUT_FILE} ]]; then
+       warning "${OUT_FILE} exists, moving to ${OUT_FILE}.bak"
+       mv ${OUT_FILE} ${OUT_FILE}.bak
+    fi
+    process-apps ${apps}
+}
+
+
+if [[ -z ${1} ]]; then
+    process-all
+else
+    unset apps in_file
+    while [[ ${#} -gt 0 ]]; do
+        case ${1} in
+            -h|--help)
+                usage;;
+            -b|--blacklist)
+                shift
+                BLACKLIST_APPS="$@";;
+            -f|--file)
+                shift
+                in_file=${1}
+                shift;;
+            -o|--out)
+                shift
+                export OUT_FILE=${1}
+                shift;;
+            *)
+                apps="${apps} ${1}"
+                shift;;
+        esac
+    done
+    if [[ -n ${in_file} ]]; then
+        process-all ${in_file}
+    elif [[ -n ${apps} ]]; then
+        process-apps ${apps}
+    else
+        process-all
+    fi
+fi
