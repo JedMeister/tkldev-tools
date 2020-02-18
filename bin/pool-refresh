@@ -1,6 +1,10 @@
 #!/bin/bash -e
 
-pool-unregister $@
+for package_src in $@; do
+    pool-unregister $package_src
+done
 pool-gc
-pool-register $@
-pool-info | grep $@
+for package_src in $@; do
+    pool-register $package_src
+    pool-info | grep "^${package_src%/}#"
+done
