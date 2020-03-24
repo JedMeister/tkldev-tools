@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+target=$1
+cp '/turnkey/fab/common/overlays/turnkey.d/systemd-chroot/usr/local/bin/service' "$target/usr/local/bin/service" || true
+fab-chroot $target
+

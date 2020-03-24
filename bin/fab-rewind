@@ -1,0 +1,37 @@
+#!/bin/bash -eu
+
+target=$1
+
+function stop_services() {
+    targ=$1
+    fab-chroot build/$targ service mysql stop
+    fab-chroot build/$targ service apache2 stop
+}
+function undeck() {
+    targ=$1
+    if [ -d build/$targ ]; then
+        stop_services $targ
+        deck -D build/$targ
+    fi
+    if [ -f build/stamps/$targ ]; then
+        rm build/stamps/$targ
+    fi
+}
+
+case $target in
+    root.patched)
+        undeck root.sandbox
+        ;;
+    root.build)
+        undeck root.sandbox;
+        undeck root.patched
+        ;;
+    bootstrap)
+        undeck root.sandbox;
+        undeck root.patched;
+        undeck root.build
+        ;;
+    *)
+        echo "unknown target: $target" 1>&2;
+        echo "note: rewind TO $target, so select the latest target you want to still exist" 1>&2;
+esac
