@@ -1,0 +1,96 @@
+#!/bin/bash -e
+
+# A collection of GitHub related functions
+
+construct_gh_url() {
+    protocol=${1}
+    user=${2}
+    repo=${3} # optional - just returns url if not sent
+
+    if [[ ${protocol} = ssh ]]; then
+        url_base="git@github.com:"
+    elif [[ ${protocol} = https ]]; then
+        url_base="https://github.com/"
+    else
+        fatal "[${FUNCNAME[1]}]:unknown protol: ${protocol}; only ssh or https supported"
+    fi
+    if [[ ! ${repo} ]]; then
+        echo "${url_base}${user}"
+        return
+    elif [[ ! ${repo} =~ \.git$ ]]; then
+        repo=${repo}.git
+    fi
+    echo "${url_base}${user}/${repo}"
+}
+
+get_remotes() {
+    switch=${1}
+
+    remotes=$(git remote -v | grep fetch | tr '\t' ' ')
+    no_of_remotes=$(wc -l <<< ${remotes})
+    remote_names=$(cut -d' ' -f1 <<< ${remotes})
+    remote_urls=$(cut -d' ' -f2 <<< ${remotes})
+    case ${switch} in
+        -h)
+            cat<<EOF
+            ${FUNCNAME[1]} [-c|-n|-u]
+            -c  count
+            -n  name(s) - entries line separated
+            -u  url(s) - entries line separated
+            -a  name & url - space separated, entries line separated
+EOF
+            ;;
+        -c)
+            echo "${no_of_remotes}";;
+        -n)
+            echo "${remote_names}";;
+        -a)
+            for i in $(seq 1 ${no_of_remotes}); do
+                readarray -s $((i-1)) name <<<"${remote_names}"
+                readarray -s $((i-1)) url <<<"${remote_urls}"
+                echo ${name} ${url}
+            done
+    esac
+}
+
+remote_url_from_name() {
+    name=${1}
+
+    remotes=$(get_remotes -a)
+    grep "${name} " <<<"${remotes}" | cut -d' ' -f2
+}
+
+remote_name_from_url() {
+    url=${1}
+
+    remotes=$(get_remotes -a)
+    grep " ${url}" <<<"${remotes}" | cut -d' ' -f1
+}
+
+test_remote_name() {
+    # tests if remote name exists; returns true|false
+    remote_name=${1}
+
+    if [[ $(grep ${remote_name} <<<$(get_remotes -n)) ]]; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+test_remote_match() {
+    # given a remote_name; tests if the remote_url matches the expected;
+    # returns true|false
+    remote_name=${1}
+    remote_url=${2}
+
+    if [[ $(remote_url_from_name ${remote_name}) = ${remote_url} ]]; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+
+
+

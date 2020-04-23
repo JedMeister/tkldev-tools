@@ -1,0 +1,27 @@
+#!/bin/bash -e
+
+# Common tkldev-tools bash-lib
+#
+# A collection of common functions
+
+set-debug() {
+    set -x
+}
+
+fatal() { echo "FATAL [$(basename $0)]: $@" 1>&2; exit 1; }
+warning() { echo "WARNING [$(basename $0)]: $@"; }
+info() { echo "INFO [$(basename $0)]: $@"; }
+
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        fatal "This action requires root"
+    fi
+}
+
+read_file() {
+    file=${1}
+    [[ -n ${file} ]] || fatal "[${FUNCNAME[1]}]:file not defined"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        echo ${line}
+    done < "${file}"
+}
