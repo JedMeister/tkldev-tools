@@ -1,0 +1,87 @@
+#!/bin/bash -e
+# Copyright (c) 2018 TurnKey GNU/Linux - https://www.turnkeylinux.org
+# 
+# tkldev-get-latest
+# ------------
+# A tool to get the latest version of an appliance (or appliances) from the
+# TurnKey mirror.
+#
+# This file is part of tkldev-tools.
+# 
+# tkldev-tools is free software; you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+# option) any later version.
+
+fatal() { echo "FATAL [$(basename $0)]: $@" 1>&2; exit 1; }
+warning() { echo "WARNING [$(basename $0)]: $@"; }
+info() { echo "INFO [$(basename $0)]: $@"; }
+
+[[ -z ${DEVDEBUG} ]] || set -x
+
+usage() {
+cat<<EOF
+Syntax: $(basename $0) [-m MIRROR_URL] [-a ARCH] [-V MAJOR_VER]
+
+Given a major version (if not specified defaults to ${VER}), this script will
+return the name of the latest appliance isos currently hosted on the TurnKey
+mirror.
+
+Returns an alphabetical, line separated list of full appliance names (including
+TurnKey version number, Debian codename and architecture) of the most recent
+release of all appliances hosted on the TurnKey mirror.
+
+Note: Release candidates are not considered so no rc versions will be returned.
+
+E.g.:
+
+    $(basename $0) | grep core
+    core-15.0-stretch-amd64
+
+Options::
+
+	-m|--mirror MIRROR_URL
+						- full base url of TurnKey mirror to use
+                        (default: ${MIRROR})
+
+    -a|--arch ARCH      - architecture [amd64|i386] to find
+                        (default ${ARCH})
+
+    -V|--version        - major version to search for
+                        (default ${VER})
+
+    -h|--help			- print this help and exit
+
+Environment::
+
+    DEVDEBUG            - turn on debugging
+
+EOF
+exit 1
+}
+
+MIRROR='http://mirror.turnkeylinux.org/turnkeylinux'
+ARCH='amd64'
+VER='15'
+
+while [[ ${1} != "" ]]; do
+    case ${1} in
+        -h|--help)    	usage;;
+        -m|--mirror)	MIRROR=${2}; shift;;
+        -a|--arch) 		ARCH=${2}; shift;;
+        -V|--version)	VER=${2}; shift;;
+        *)              warning "unknown argument ${1}"; usage;;
+    esac
+    shift
+done
+
+curl -s "${MIRROR}/images/iso/" | \
+    tr '>' '\n' | \
+    grep 'href=.turnkey-' | \
+    sed 's|.*href=.turnkey-||; s|.iso.*$||' | \
+    grep "${VER}" | \
+    grep -v "\.[0-9]*rc[0-9]*-" | \
+    sort -u | \
+    grep -v bitkey | \
+    $(dirname $(realpath $0))/.get-latest.py --arch=${ARCH} | \
+    sort

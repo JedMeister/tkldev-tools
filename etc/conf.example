@@ -1,0 +1,33 @@
+# conf file for tkldev-tools
+
+# [common conf]
+
+## [tkldev-clone conf]
+
+## Add your GH username here
+export GH_USER=
+
+## GH protocol to use; options are https|ssh
+export TKL_PROT=https
+export USR_PROT=ssh
+
+## default behaviour is to name turnkey remote repo 'turnkey' and use $GH_USER
+## as 'origin'.
+
+export TKL_REMOTE=turnkey
+export USR_REMOTE=origin
+
+## If instead you wish to keep 'turnkey' as 'origin' and name your remote after
+## $GH_USER then uncomment these lines (or adjust as you like):
+#
+#export TKL_REMOTE=origin
+#export USR_REMOTE=${GH_USER}
+
+## set what remote master should track. default is turnkey remote master branch, e.g. turnkey/master
+
+export TRACK_REMOTE=${TKL_REMOTE}/master
+
+## to track your own remote and/or alternate branch, uncomment & adjust below
+#
+#export TRACK_REMOTE=${GH_USER}/other-branch
+
