@@ -1,127 +1,41 @@
 #!/bin/bash -e
-# Copyright (c) 2017 TurnKey GNU/Linux - http://www.turnkeylinux.org
-# 
-# tkldev-clone
-# ------------
-# A tool to easily clone turnkey appliance source code from GitHub.
-#
-# This file is part of tkldev-tools.
-# 
-# tkldev-tools is free software; you can redistribute it and/or modify it
-# under the terms of the GNU Affero General Public License as published by the
-# Free Software Foundation; either version 3 of the License, or (at your
-# option) any later version.
 
-# load conf & bash-libs
+fatal() { echo "FATAL: $@" >&2 ; exit 1 ; }
 
-BASE_DIR=/usr/local/src/tkldev-tools
-
-if [[ ! -f ${BASE_DIR}/etc/conf ]]; then
-    warning "conf file ${BASE_DIR}/etc/conf does not exist, copying default, please check and edit"
-    cp ${BASE_DIR}/etc/conf.example ${BASE_DIR}/etc/conf
-fi
-. ${BASE_DIR}/etc/conf
-. ${BASE_DIR}/lib/bash-common
-. ${BASE_DIR}/lib/github
-
-usage() {
-cat<<EOF
-Syntax: $(basename $0) appliance-name
-
-When run anywhere on tkldev, this script will clone an appliance repo to a
-local directory in /turnkey/fab/products/appliance-name. 
-
-It also adjusts the git remotes so that TurnKey repo becomes 'turnkey' and 
-'origin' becomes your GitHub fork of the repo. Please note though; it won't 
-create it on Github if it doesn't exist. You'll still need to fork the relevant
-appliance on GitHub if you wish to push your changes). 
-
-If the directory already exists, then it will do the remotes adjustment as 
-above. It will then checkout 'master', pull from TurnKey, and push back to
-your forked repo on GitHub (assuming that it exists).
-
-Once all that is done, it drops you in a new shell inside the directory.
-
-Note: as it opens a new shell, extended usage (without killing all the 
-additional subshells) may cause performance issues over time. If you work 
-within an SSH session, you may need to exit multiple times to escape...
-
-Prerequisites:
-
-    GitHub account      - optional, but useful if you want to hack on it!
-    SSH GH push access  - optional, but currently only supported push method
-
-Arguments::
-
-    appliance-name      - e.g., core
-
-Environment::
-
-    ORIGIN              - GitHub username to use for the origin repo
-    DEVDEBUG            - turn on debugging
-
-Future plans:
-
-    - develop some neater way of dropping you into the right dir, without 
-      spawning mass subshells...
-    - leverage octhub to create the initial fork on GH?
-    - support for HTTPS GH auth?
-
-EOF
-exit 1
+conf() {
+    case $1 in
+        origin)
+            echo "git@github.com:JedMeister";;
+        ongle)
+            echo "https://github.com/OnGle";;
+        qq7)
+            echo "https://github.com/qq7";;
+        *)
+            fatal "Unknown remote: ${1}";;
+    esac
 }
 
-[ -z "$ORIGIN" ] && \
-    warning "ORIGIN variable not set, you won't be able to push"
-
-PROD=/turnkey/fab/products
-TKL_APP_URL=$(construct_gh_url ${TKL_PROT} turnkeylinux-apps)
-TKL_URL=$(construct_gh_url ${TKL_PROT} turnkeylinux)
-USR_URL=$(construct_gh_url ${USR_PROT} ${GH_USER})
-
-
-adjust_remotes() {
-    tkl_remote_name=${1}
-    tkl_remote_repo=${2}
-    usr_remote_name=${3}
-    usr_remote_repo=${4}
-
-    declare -A _remotes=( [${tkl_remote_name}]=${tkl_remote_repo} [${usr_remote_name}]=${usr_remote_repo})
-
-    for name in ${tkl_remote_name} ${usr_remote_name}; do
-        if [[ $(test_remote_name ${name}) = false ]]; then
-            git remote add ${name} ${_remotes[${name}]}
-        fi
-        if [[ $(test_remote_match ${name} ${_remotes[${name}]}) = false ]]; then
-            git remote set-url ${name} ${_remotes[${name}]}
-        fi
-    done
+add_remote() {
+    app=${1}
+    name=${2}
+    remote=$(conf ${name})/${app}.git
+    git remote add $name $remote
+    git fetch $name
 }
 
-set_tracking() {
-    remote_master=$(git rev-parse --abbrev-ref master@{upstream})
-    if [[ ${remote_master} != ${TRACK_REMOTE} ]]; then
-        git branch --set-upstream master ${TRACK_REMOTE}
-    fi
-}
+app=${1} && shift || fatal "Needs at least one arg"
 
-[ -z "$1" ] && fatal "appliance name must be specified"
+git clone git@github.com:turnkeylinux-apps/${app}.git -o turnkey
+cd ${app}
+add_remote ${app} origin
 
-APP=$(echo $1 | sed "s|/||g")
-APP_DIR=$PROD/$APP
-
-if [ -d "$APP_DIR" ]; then
-    info "directory exists already; checking for updates and adjusting remotes"
-    cd $APP_DIR
-    [[ -n $(git status -s) ]] && fatal "repo has uncommited changes"
-    adjust_remotes
-    git checkout master
-    git pull turnkey master
-    git push origin master
-else
-    info "directory doesn't exist; attempting to clone and adjusting remotes"
-    cd $PROD
-    git clone ${TKL}/${APP}.git ${APP_DIR}
-    cd ${APP_DIR}
-    adjust_remotes
-    git push origin master
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --)
+            shift;;
+        *)
+            add_remote ${app} ${1}
+            shift;;
+    esac
+done
+git push origin master
