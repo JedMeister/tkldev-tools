@@ -18,8 +18,17 @@ invalid overlay file locations:
 - /usr/sbin (i.e. ...)
 - /usr/lib/
   
-  - exception: /usr/lib/inithooks
-  - exception: /usr/lib/confconsole
+  - default exception: /usr/lib/inithooks
+  - default exception: /usr/lib/confconsole
+
+check for specific files:
+-------------------------
+
+- overlay/usr/lib/inithooks/firstboot.d/20regen-*
+
+  - warn/fail if doesn't exist (may be overridden)
+
+- conf.d/* - at least one file
 
 
 Options to:
