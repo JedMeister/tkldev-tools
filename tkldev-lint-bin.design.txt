@@ -1,0 +1,31 @@
+Check for:
+==========
+
+executable files:
+-----------------
+
+- all files in conf.d/
+- all files in overlay/usr/lib/inithooks/firstboot.d/
+- all files in overlay/usr/lib/inithooks/bin/
+- all files in overlay/usr/local/bin
+- 
+
+invalid overlay file locations:
+-------------------------------
+
+- (could suggest that these should go in /usr/local!?)
+- /usr/bin (i.e. overlay/usr/bin)
+- /usr/sbin (i.e. ...)
+- /usr/lib/
+  
+  - exception: /usr/lib/inithooks
+  - exception: /usr/lib/confconsole
+
+
+Options to:
+===========
+
+- "strict" checking - i.e. non-zero exit even if only warnings
+- exclusions file - a file that can keep track of exclusions to specific rules
+- run on common with slightly different conf
+
