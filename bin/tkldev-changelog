@@ -17,8 +17,13 @@ warning() { echo "WARNING [$(basename $0)]: $@"; }
 info() { echo "INFO [$(basename $0)]: $@"; }
 
 usage() {
+    if [[ $# -ne 0 ]]; then
+        echo "ERROR: $@"
+        echo
+        exit_code=1
+    fi
 cat<<EOF
-Syntax: $(basename $0) appliance-name
+Syntax: $(basename $0) [appliance-name]
 When run in the root directory of an appliance's source code, this script will
 create a new changelog entry at the top of an existing changelog file & opens
 the file for editing in vim.
@@ -32,6 +37,18 @@ Prerequisites:
 Arguments::
 
     appliance-name      - e.g., core
+    -a|--author         - Update the author name and email address of the most
+                          recent entry (do not leave open for editing).
+    -d|--date           - Update the date of the most recent entry (do not
+                          leave open for editing).
+    -e|--edit           - Edit the most recent entry (rather than generating a
+                          new one) - implies -d|--date & -n|--name, but leaves
+                          open for editing.
+    -n|--new-minor      - Create new minor version changelog entry (e.g. 16.1).
+                          Leaves open for editing. (Default action if no switch
+                          specified).
+    -N|--new-major      - Create new major version changelog entry (e.g. 17.0).
+                          Leaves open for editing.
 
 Environment::
 
@@ -53,9 +70,10 @@ Future plans:
     - support alternate text editors?
 
 EOF
-exit 1
+    exit $exit_code
 }
 
+[[ -z "$DEVDEBUG" ]] || set -x
 which dch > /dev/null || fatal "dch not found; please install 'devscripts'"
 which vim > /dev/null || fatal "vim not found; call yourself a developer?!?"
 [ -z "$EXTRA_TEXT" ] && EXTRA_TEXT=/turnkey/fab/products/common-changes
@@ -63,17 +81,75 @@ which vim > /dev/null || fatal "vim not found; call yourself a developer?!?"
 
 APP=$(basename $PWD)
 
+author_name=${FULLNAME:-$DEBFULLNAME}
+author_email=${EMAIL:-$DEBEMAIL}
+
+unset set_author set_date new_min_set new_maj_set new edit
+if [[ $# -eq 0 ]]; then
+    # if no args; then default to '-n|--new-minor'
+    new_min_set=1
+    new=minor
+    edit=y
+fi
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage;;
+        -a|--author)
+            set_author=y
+            edit=n
+            shift;;
+        -d|--date)
+            set_date=y
+            edit=n
+            shift;;
+        -e|--edit)
+            set_author=y
+            set_date=y
+            edit=y
+            shift;;
+        -n|--new-minor)
+            new_min_set=1
+            new=minor
+            edit=y
+            shift;;
+        -N|--new-major)
+            new_maj_set=1
+            new=major
+            edit=y
+            shift;;
+    esac
+done
+
 OLD_VER=$(head -1 changelog | cut -d' ' -f1 | sed "s|^.*${APP}-||")
 MAJ="$(echo ${OLD_VER} | cut -d. -f1)"
-MIN="$(( $(echo ${OLD_VER} | cut -d. -f2) +1 ))"
-NEW_VER=${MAJ}.${MIN}
+MIN="$(echo ${OLD_VER} | cut -d. -f2)"
 
+if [[ -n "$new_min_set" ]] && [[ -n "$new_maj_set" ]]; then
+    usage "-n|--new-minor & -N|--new-major can't both be set; doesn't make sense."
+elif [[ "$new" == 'minor' ]]; then
+    MIN="$(( $(echo ${OLD_VER} | cut -d. -f2) +1 ))"
+elif [[ "$new" == 'major' ]]; then
+    MAJ=$(( $MAJ +1 ))
+    MIN=0
+fi
+
+NEW_VER=${MAJ}.${MIN}
 NAME="turnkey-${APP}-${NEW_VER}"
 
-dch --changelog changelog --release-heuristic log --package $NAME --newversion 1 --force-distribution turnkey --urgency low
-
-sed -i "3s|\*.*|\* |" changelog
-sed -e "4r ${EXTRA_TEXT}" -i changelog
-
-vim "+call cursor(3, 7)" changelog
-
+if [[ -n "$set_date" ]]; then
+    dch --changelog changelog --release --force-distribution turnkey --urgency low
+fi
+if [[ -n "$set_author" ]]; then
+    sed -i "0,\|^ -- |s|^.*> \(.*\)| -- $author_name <$author_email> \1|" changelog
+fi
+if [[ "$edit" == 'y' ]]; then
+    if [[ -n "$new" ]]; then
+        dch --changelog changelog --release-heuristic log --package $NAME --newversion 1 --force-distribution turnkey --urgency low
+        sed -i "3s|\*.*|\* |" changelog
+        sed -e "4r ${EXTRA_TEXT}" -i changelog
+    else
+        sed -i '3i\ \ * \n' changelog
+    fi
+    vim "+call cursor(3, 7)" changelog
+fi
