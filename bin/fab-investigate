@@ -1,5 +1,14 @@
 #!/bin/bash -eu
+
 target=$1
+
 cp '/turnkey/fab/common/overlays/turnkey.d/systemd-chroot/usr/local/bin/service' "$target/usr/local/bin/service" || true
+
+# disable confconsole from starting
+chmod -x "$target/root/.bashrc.d/confconsole-auto"
+
 fab-chroot $target
 
+# after running undo what was done
+rm -rf "$target/usr/local/bin/service"
+chmod +x "$target/root/.bashrc.d/confconsole-auto"
