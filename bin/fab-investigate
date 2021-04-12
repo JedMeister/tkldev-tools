@@ -24,10 +24,15 @@ if [[ "$PWD" == "$FAB_PATH/products/"* ]]; then
 else
     app_name="random"
 fi
-target=$1
-service=usr/local/bin/service
 
-cp "$FAB_PATH/common/overlays/turnkey.d/systemd-chroot/$service" "$target/$service" || true
+target=${1%/} # remove trailing slash if it exists
+local_bin=usr/local/bin
+dst=$1/$local_bin
+src=$FAB_PATH/common/overlays/turnkey.d/systemd-chroot/$local_bin
+
+for script in service systemctl; do
+    cp "$src/$script" "$dst/"
+done
 
 # disable confconsole from starting
 chmod -x "$target/root/.bashrc.d/confconsole-auto" || true
@@ -38,6 +43,10 @@ echo "$app_name chroot" > "$target/etc/debian_chroot"
 fab-chroot $target
 
 # after running undo what was done
-rm -rf "$target/$service"
+echo "$dst/"
+for script in service systemctl; do
+    rm -rf "$dst/$script"
+done
 chmod +x "$target/root/.bashrc.d/confconsole-auto" || true
 rm -rf "$target/etc/debian_chroot"
+echo "completed"
