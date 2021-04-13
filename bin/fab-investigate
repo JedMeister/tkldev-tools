@@ -43,10 +43,9 @@ echo "$app_name chroot" > "$target/etc/debian_chroot"
 fab-chroot $target
 
 # after running undo what was done
-echo "$dst/"
 for script in service systemctl; do
     rm -rf "$dst/$script"
 done
 chmod +x "$target/root/.bashrc.d/confconsole-auto" || true
 rm -rf "$target/etc/debian_chroot"
-echo "completed"
+echo "complete"
