@@ -1,21 +1,46 @@
 #!/bin/bash -eu
 
-target=$1
+info() { echo "INFO: $@"; }
+fatal() { echo "FATAL: $@" >&2; exit 1; }
 
-function stop_services() {
-    targ=$1
-    fab-chroot build/$targ service mysql stop
-    fab-chroot build/$targ service apache2 stop
+usage() {
+    exit_code=$1
+    shift
+    [[ $# -eq 0 ]] || echo "FATAL: $@"
+    cat <<EOF
+$(basename $0) TARGET
+
+    Rewind build to TARGET layer.
+
+    Select the latest target you want to still exist.
+
+    Valid targets:
+        root.patched
+        root.build
+        bootstrap
+
+EOF
+    exit $exit_code
 }
-function undeck() {
+
+target=$1
+[[ -n "$target" ]] || usage 1 "Target must be set."
+
+stop_services() {
     targ=$1
-    if [ -d build/$targ ]; then
+    info "Stopping services"
+    for service in mysql pgsql apache2 lighttpd nginx; do
+        fab-chroot build/$targ service $service stop 2>/dev/null
+    done
+}
+
+undeck() {
+    targ=$1
+    if [[ -d build/$targ ]]; then
         stop_services $targ
         deck -D build/$targ
     fi
-    if [ -f build/stamps/$targ ]; then
-        rm build/stamps/$targ
-    fi
+    rm -f build/stamps/$targ
 }
 
 case $target in
@@ -31,7 +56,9 @@ case $target in
         undeck root.patched;
         undeck root.build
         ;;
+    help)
+        usage 0
+        ;;
     *)
-        echo "unknown target: $target" 1>&2;
-        echo "note: rewind TO $target, so select the latest target you want to still exist" 1>&2;
+        usage 1 "Unknown target: $target."
 esac
