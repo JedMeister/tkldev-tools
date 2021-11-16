@@ -23,6 +23,8 @@ EOF
     exit $exit_code
 }
 
+[[ -z "$DEBUG" ]] || set -x
+
 target=$1
 [[ -n "$target" ]] || usage 1 "Target must be set."
 
@@ -30,7 +32,7 @@ stop_services() {
     targ=$1
     info "Stopping services"
     for service in mysql pgsql apache2 lighttpd nginx; do
-        fab-chroot build/$targ service $service stop 2>/dev/null
+        fab-chroot build/$targ service $service stop 2>/dev/null || true
     done
 }
 
@@ -38,22 +40,30 @@ undeck() {
     targ=$1
     if [[ -d build/$targ ]]; then
         stop_services $targ
-        deck -D build/$targ
+        if [[ "$targ" == "cdroot" ]]; then
+            rm -rf build/product.iso
+            rm -rf build/$targ
+        else
+            deck -D build/$targ
+        fi
     fi
     rm -f build/stamps/$targ
 }
 
 case $target in
     root.patched)
+        undeck cdroot
         undeck root.sandbox
         ;;
     root.build)
-        undeck root.sandbox;
+        undeck cdroot
+        undeck root.sandbox
         undeck root.patched
         ;;
     bootstrap)
-        undeck root.sandbox;
-        undeck root.patched;
+        undeck cdroot;
+        undeck root.sandbox
+        undeck root.patched
         undeck root.build
         ;;
     help)
