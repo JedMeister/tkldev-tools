@@ -137,6 +137,9 @@ fi
 NEW_VER=${MAJ}.${MIN}
 NAME="turnkey-${APP}-${NEW_VER}"
 
+OLD_FILE="$(cat changelog)"
+OLD_HASH="$(sha512sum changelog)"
+
 if [[ -n "$set_date" ]]; then
     dch --changelog changelog --release --force-distribution turnkey --urgency low
 fi
@@ -152,4 +155,8 @@ if [[ "$edit" == 'y' ]]; then
         sed -i '3i\ \ * \n' changelog
     fi
     vim "+call cursor(3, 7)" changelog
+    if echo "$OLD_HASH" | sha512sum -c --status; then
+        echo "no changes made, reverting"
+        echo "$OLD_FILE" > changelog
+    fi
 fi
