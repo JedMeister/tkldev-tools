@@ -31,3 +31,9 @@ export TRACK_REMOTE=${TKL_REMOTE}/master
 #
 #export TRACK_REMOTE=${GH_USER}/other-branch
 
+# Extra remotes to add; in the format "REMOTE_NAME <space/tab> REMOTE_URL"
+# Additonal remotes can be added, separated with a newline (for easier reading
+# any leading space after the newline is stripped). E.g.:
+#
+#export XTRA_REMOTES="REMOTE_1 https://github.com/USER_1
+#                     REMOTE_2 https://github.com/USER_2"

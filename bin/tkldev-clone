@@ -1,41 +1,265 @@
-#!/bin/bash -e
+#!/bin/bash -eu
+
+DEBUG=${DEBUG:-}
 
 fatal() { echo "FATAL: $@" >&2 ; exit 1 ; }
+warning() { echo "WARNING: $@" >&2 ; }
+info() { echo "INFO: $@"; }
 
-conf() {
-    case $1 in
-        origin)
-            echo "git@github.com:JedMeister";;
-        ongle)
-            echo "https://github.com/OnGle";;
-        qq7)
-            echo "https://github.com/qq7";;
-        *)
-            fatal "Unknown remote: ${1}";;
-    esac
+CONF=/etc/tkldev-tools/conf
+source $CONF|| fatal "Conf ($CONF) doesn't exist or is not valid"
+
+usage() {
+    cat <<EOF
+$(basename $0) [ -a|--appliance APP_NAME | -p|--program PROG_NAME ]
+
+This script will clone an appliance build code repo &/or program source code
+repo, to a local directory. Where it will be cloned depends on which switch is
+used. Appliance code will go in \$FAB_PATH/product/<appliance_name>
+
+It will also adjust the git remotes as per what is configured in the
+tkldev-tools config file (/etc/tkldev-tools/conf).
+
+ - The TurnKey remote will use:
+        - the protocol set as \$TKL_PROT (https by default)
+        - the remote name set as \$TKL_REMOTE ('turnkey' by default)
+ - The user remote will use:
+        - the protocol set as \$USR_PROT (ssh by default)
+        - the remote name set as \$USR_REMOTE ('origin' by default)
+ - Additional remotes can be added via the XTRA_REMOTE value (in config file)
+   or -x|--extra-remote switch.
+
+Please note that it will fail if the TurnKey repo doesn't exist. Otherwise
+remotes will be added whether they exist or not. You are responsible for
+checking they exist and/or creating them on GitHub (e.g. via forking the
+relevant repo).
+
+If the directory you are cloning to already exists, then it will adjust the
+remotes as noted above. It will then checkout 'master', pull from TurnKey, and
+push back to master of your fork on GitHub (assuming that it exists).
+
+Config prerequisites:
+
+    GitHub account      - optional, but useful if you want to hack on it!
+    GH_USER (in config) - optional, if not set, a personal remote will not be
+                          set
+    SSH GH push access  - optional, but currently only supported push method
+
+Arguments::
+
+    -a|--appliance APP_NAME - Clone APP_NAME from
+                              https://github.com/turnkeylinux-apps/ to
+                              \$FAB_PATH/products/APP_NAME
+    -p|--program PROG_NAME  - Clone PROG_NAME from
+                              https://github.com/turnkeylinux/ to
+                              /turnkey/public/PROG_NAME
+    -x|--extra-remote       - Extra remotes to add
+    -P|--private            - Clone programs to /turnkey/private instead.
+                              Affects all progs and extra-remotes will be
+                              ignored.
+
+All arguments can be given multiple times, but please note that all extra
+remotes will be added to all repos.
+
+Environment::
+
+    DEBUG=y                 - turn on debugging
+
+Future plans:
+
+    - leverage octhub to create the initial fork on GH?
+    - support for HTTPS GH auth?
+
+EOF
+}
+
+[[ -z "$DEBUG" ]] || set -x
+
+valid() {
+    if [[ -e "$1" ]]; then
+        if [[ -d "$1" ]]; then
+            if [[ -d "$1/.git" ]]; then
+                return
+            else
+                warning "$1 exists but isn't git repo. Skipping."
+                return 1
+            fi
+        else
+            warning "$1 exists but is a file. Skipping."
+            return 1
+        fi
+    else
+        return 0
+    fi
+}
+
+exists() {
+    if [[ -d "$1" ]]; then
+        return
+    else
+        return 1
+    fi
+}
+
+get_url() {
+    uri_part=$1
+    proto=$2
+    if [[ "$proto" == "https" ]]; then
+        echo "https://github.com/$uri_part"
+    elif [[ "$proto" == "ssh" ]]; then
+        echo "git@github.com:$uri_part"
+    else
+        fatal "Protocol not set or incorrect ($proto)"
+    fi
+}
+
+get_tkl_url() {
+    app_or_prog=$1
+    repo=$2
+    if [[ "$app_or_prog" == "app" ]]; then
+        url_part=turnkeylinux-apps/$repo.git
+    elif [[ "$app_or_prog" == "prog" ]]; then
+        url_part=turnkeylinux/$repo.git
+    else
+        fatal "App_or_prog incorrect (must be 'app' or 'prog')."
+    fi
+    get_url $url_part $TKL_PROT
+}
+
+get_user_url() {
+    repo=$1
+    get_url $GH_USER/$repo.git $USR_PROT
+}
+
+clone_app() {
+    app=$1
+    base_path=$2
+    remote_url=$(get_tkl_url app $app)
+    git clone -o $TKL_REMOTE $remote_url $base_path/$app
+}    
+
+clone_prog() {
+    prog=$1
+    base_path=$2
+    remote_url=$(get_url prog $prog)
+    git clone -o $TKL_REMOTE $remote_url $base_path/$prog
 }
 
 add_remote() {
-    app=${1}
-    name=${2}
-    remote=$(conf ${name})/${app}.git
-    git remote add $name $remote
-    git fetch $name
+    repo_dir=$1
+    remote_name=$2
+    remote_url=$3
+    cd $repo_dir
+    git remote add $remote_name $remote_url || info "Skipping existing remote."
+    git fetch $remote_name \
+        || warning "Fetching remote $remote_name (for $repo_dir) failed"
 }
 
-app=${1} && shift || fatal "Needs at least one arg"
+add_xtra_remotes() {
+    path=$1
+    repo=$(basename $path).git
+    cd $path
+    readarray -t <<<"$XTRA_REMOTES"
+    for index in ${!MAPFILE[@]}; do
+        remote_info=${MAPFILE[$index]}
+        echo "remote_info: $remote_info"
+        add_remote $path \
+            $(echo $remote_info | cut -d' ' -f1) \
+            $(echo $remote_info | cut -d' ' -f2)/$repo
+    done
+}
 
-git clone git@github.com:turnkeylinux-apps/${app}.git -o turnkey
-cd ${app}
-add_remote ${app} origin
+update_remotes() {
+    repo_dir=$1
+    tkl_repo=$2
+    cd $repo_dir
+    tkl_remote=$(git remote -v | grep turnkeylinux | head -1)
+    usr_remote=$(git remote -v | grep -i $GH_USER | head -1)
+    if [[ -n "$tkl_remote" ]]; then
+        rem_name=$(echo $tkl_remote | cut -d' ' -f1)
+        if [[ "$rem_name" != "$TKL_REMOTE" ]]; then
+            git remote rename $rem_name $TKL_REMOTE
+        fi
+        rem_url=$(echo $tkl_remote | cut -d' ' -f2)
+        tkl_url=$(get_url $tkl_repo $TKL_PROT)
+        if [[ "$rem_url" != "$tkl_url" ]]; then
+            git remote set-url $TKL_REMOTE $tkl_url
+        fi
+    else
+        warning "TurnKey remote does not appear to be set for $repo_dir?"
+    fi
+    if [[ -n "$usr_remote" ]]; then
+        rem_name=$(echo $usr_remote | cut -d' ' -f1)
+        if [[ "$rem_name" != "$USR_REMOTE" ]]; then
+            git remote rename $rem_name $USR_REMOTE
+        fi
+        rem_url=$(echo $usr_remote | cut -d' ' -f2)
+        usr_url=$(get_url $GH_USER/$(basename $repo_dir).git $USR_PROT)
+        if [[ "$rem_url" != "$usr_url" ]]; then
+            git remote set-url $USR_REMOTE $usr_url
+        fi
+    else
+        add_remote $repo_dir $USR_REMOTE $(get_user_url $(basename $repo_dir))
+    fi
+}
 
+APPS=""
+PROGS=""
+PRIV=""
+XTRA_REMOTES=${XTRA_REMOTES:-}
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --)
-            shift;;
+        -a|--appliance)
+            shift
+            APPS="$APPS $1";;
+        -p|--program)
+            shift
+            PROGS="$PROGS $1";;
+        -x|--extra-remote)
+            shift
+            XTRA_REMOTES="$XTRA_REMOTES $1";;
+        -P|--private)
+            PRIV=y;;
+        -h|--help)
+            usage;;
         *)
-            add_remote ${app} ${1}
-            shift;;
+            fatal "Unknown switch, please see -h|--help."
     esac
+    shift
 done
-git push origin master
+
+for app in $APPS; do
+    base_path=$FAB_PATH/products
+    app_path=$base_path/$app
+    if valid $app_path; then
+        if exists $app_path; then
+            info "$app_path git repo exists; updating remotes only"
+        else
+            info "Cloning $app to $app_path"
+            clone_app $app $base_path
+        fi
+        update_remotes $app_path $TKL_REMOTE turnkeylinux-apps/$(basename $app_path).git
+        [[ -z "$XTRA_REMOTES" ]] || add_xtra_remotes $app_path
+    fi
+done
+
+for prog in $PROGS; do
+    if [[ -n "$PRIV" ]]; then
+        base_path=/turnkey/private
+    else
+        base_path=/turnkey/public
+    fi
+    prog_path=$base_path/$prog
+    if valid $prog_path; then
+        if exists $prog_path; then
+            info "$prog_path git repo exists; updating remotes only"
+        else
+            info "Cloning $prog to $prog_path"
+            clone_prog $prog $base_path
+        fi
+        update_remotes $prog_path
+        if [[ -n "$XTRA_REMOTES" ]] && [[ -z "$PRIV" ]]; then
+            add_xtra_remotes $prog_path
+        fi
+    fi
+done
