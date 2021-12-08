@@ -76,10 +76,31 @@ EOF
 [[ -z "$DEVDEBUG" ]] || set -x
 which dch > /dev/null || fatal "dch not found; please install 'devscripts'"
 which vim > /dev/null || fatal "vim not found; call yourself a developer?!?"
-[ -z "$EXTRA_TEXT" ] && EXTRA_TEXT=/turnkey/fab/products/common-changes
 [ -f changelog ] || fatal "no changelog in local dir"
 
 APP=$(basename $PWD)
+COMMON_CHANGES="${FAB_PATH}/products/common-changes"
+COMMON_CHANGE_CHECKS=("lapp.mk" "lamp.mk" "nodejs.mk")
+
+if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
+    EXTRA_TEXT="$(cat "${COMMON_CHANGES}/base")"
+    for change_check in ${COMMON_CHANGE_CHECKS[@]}; do
+        if grep -Fq "$change_check" Makefile; then
+            change_fn="${COMMON_CHANGES}/${change_check%.mk}"
+            if [ -f "$change_fn" ]; then
+                EXTRA_TEXT="${EXTRA_TEXT}"$'\n\n'"$(cat "$change_fn")"
+            else
+                echo "error: common change \"$change_fn\" not found!"
+                exit 1
+            fi
+        fi
+    done
+    EXTRA_TEXT+=$'\n'
+fi
+
+EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
+trap "rm -f $EXTRA_TEXT_FILE" EXIT
+echo "$EXTRA_TEXT" > "$EXTRA_TEXT_FILE"
 
 author_name=${FULLNAME:-$DEBFULLNAME}
 author_email=${EMAIL:-$DEBEMAIL}
@@ -137,6 +158,8 @@ fi
 NEW_VER=${MAJ}.${MIN}
 NAME="turnkey-${APP}-${NEW_VER}"
 
+OLD_FILE="$(cat changelog)"
+
 if [[ -n "$set_date" ]]; then
     dch --changelog changelog --release --force-distribution turnkey --urgency low
 fi
@@ -147,9 +170,14 @@ if [[ "$edit" == 'y' ]]; then
     if [[ -n "$new" ]]; then
         dch --changelog changelog --release-heuristic log --package $NAME --newversion 1 --force-distribution turnkey --urgency low
         sed -i "3s|\*.*|\* |" changelog
-        sed -e "4r ${EXTRA_TEXT}" -i changelog
+        sed -e "4r ${EXTRA_TEXT_FILE}" -i changelog
     else
         sed -i '3i\ \ * \n' changelog
     fi
+    OLD_HASH="$(sha512sum changelog)"
     vim "+call cursor(3, 7)" changelog
+    if echo "$OLD_HASH" | sha512sum -c --status; then
+        echo "no changes made, reverting"
+        echo "$OLD_FILE" > changelog
+    fi
 fi
