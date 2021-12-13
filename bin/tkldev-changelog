@@ -83,19 +83,19 @@ COMMON_CHANGES="${FAB_PATH}/products/common-changes"
 COMMON_CHANGE_CHECKS=("lapp.mk" "lamp.mk" "nodejs.mk")
 
 if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
-    EXTRA_TEXT="$(cat "${COMMON_CHANGES}/base")"
+    EXTRA_TEXT=""
     for change_check in ${COMMON_CHANGE_CHECKS[@]}; do
         if grep -Fq "$change_check" Makefile; then
             change_fn="${COMMON_CHANGES}/${change_check%.mk}"
             if [ -f "$change_fn" ]; then
-                EXTRA_TEXT="${EXTRA_TEXT}"$'\n\n'"$(cat "$change_fn")"
+                EXTRA_TEXT="${EXTRA_TEXT}$(cat "$change_fn")"$'\n\n'
             else
                 echo "error: common change \"$change_fn\" not found!"
                 exit 1
             fi
         fi
     done
-    EXTRA_TEXT+=$'\n'
+    EXTRA_TEXT+="$(cat "${COMMON_CHANGES}/base")"$'\n'
 fi
 
 EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
