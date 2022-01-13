@@ -6,7 +6,9 @@
 
 check_root
 
-deps="devscripts"
+
+deps="devscripts" # includes dch which we leverage for tkldev-changelog
+deps="$deps python3-colorama" # required for turnkey-bugs
 
 to_install=""
 for dep in $deps; do
