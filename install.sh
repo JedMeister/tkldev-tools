@@ -1,10 +1,22 @@
-#!/bin/bash -e
+#!/bin/bash -eu
 
 # Bash installer for tkldev-tools
 
 . lib/bash-common
 
 check_root
+
+deps="devscripts"
+
+to_install=""
+for dep in $deps; do
+    dpkg -s $dep >/dev/null 2>&1 || to_install="$to_install $dep"
+done
+if [[ -n "$to_install" ]]; then
+    info "Please wait while apt indexes are updated and packages installed."
+    apt update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y $to_install
+fi
 
 SRC_PATH=$PWD
 BASE_PATH=/usr/local
@@ -15,15 +27,17 @@ CONF=${ETC_PATH}/conf
 CONF_EX=${SRC_PATH}/etc/conf.example
 
 for file in $(find ${SRC_PATH}/bin -executable -type f); do
-    ln -s ${file} ${BIN_PATH}/$(basename ${file})
+    ln -fs ${file} ${BIN_PATH}/$(basename ${file})
 done
 for file in $(find ${SRC_PATH}/lib -type f); do
-    ln -s ${file} ${LIB_PATH}/$(basename ${file})
+    ln -fs ${file} ${LIB_PATH}/$(basename ${file})
 done
 mkdir -p ${ETC_PATH}
 if [[ ! -f ${CONF} ]]; then
     cp ${CONF_EX} ${CONF}
 else
-    grep LIB_PATH ${CONF} >/dev/null || warning "LIB_PATH not set in conf"
-    warning "${CONF} already exists, please check that it is compatible with ${CONF_EX}"
+    if ! diff ${CONF_EX} ${CONF} >/dev/null 2>&1; then
+        warning "${CONF} already exists, please check that it is compatible with ${CONF_EX}"
+    fi
 fi
+info "install complete."
