@@ -60,7 +60,7 @@ I use these lots, so always install them (note all TurnKey apps include
 'vim-tiny', this will install full vim::
 
     apt update -qq
-    apt install -y tree vim
+    apt install -y tree vim ipython3
 
 
 .. _sign up: https://github.com/signup
