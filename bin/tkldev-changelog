@@ -91,11 +91,12 @@ if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
                 EXTRA_TEXT="${EXTRA_TEXT}$(cat "$change_fn")"$'\n\n'
             else
                 echo "error: common change \"$change_fn\" not found!"
-                exit 1
+                echo "Ignoring..."
+                #exit 1
             fi
         fi
     done
-    EXTRA_TEXT+="$(cat "${COMMON_CHANGES}/base")"$'\n'
+    EXTRA_TEXT+="$(cat "${COMMON_CHANGES}/base")"$'\n' || true
 fi
 
 EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
