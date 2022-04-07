@@ -32,7 +32,7 @@ target=$1
 
 stop_services() {
     targ=$1
-    info "Stopping services"
+    info "Stopping services in $targ"
     for service in mysql pgsql apache2 lighttpd nginx; do
         fab-chroot build/$targ service $service stop 2>/dev/null || true
     done
@@ -72,5 +72,5 @@ case $target in
         usage 0
         ;;
     *)
-        usage 1 "Unknown target: $target."
+        usage 1 "Unknown target: '$target'"
 esac

@@ -96,7 +96,9 @@ if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
             fi
         fi
     done
-    EXTRA_TEXT+="$(cat "${COMMON_CHANGES}/base")"$'\n' || true
+
+    EXTRA_TEXT+="$(cat "${COMMON_CHANGES}/base" 2>/dev/null)"$'\n' \
+        || true
 fi
 
 EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
