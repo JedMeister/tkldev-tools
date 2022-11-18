@@ -1,8 +1,9 @@
-#!/bin/bash -eu
+#!/bin/bash -e
 
 DEBUG=${DEBUG:-n}
 
 info() { echo "INFO: $@"; }
+warn() { echo "WARN: $@" >&2; }
 fatal() { echo "FATAL: $@" >&2; exit 1; }
 
 usage() {
@@ -47,7 +48,7 @@ fi
 targets=("bootstrap" "root.build" "root.patched")
 target=$1
 
-[[ ! " ${targets[*]} " =~ " ${target} " ]] || usage 1 "Only valid targets can be used."
+[[ " ${targets[*]} " =~ " ${target} " ]] || usage 1 "Only valid targets can be used."
 
 stop_services() {
     targ=$1
@@ -77,8 +78,8 @@ mount_if_not_mounted() {
         return
     else
         targets_array_len=${#targets[@]}
-        for (( i=0; i<${target_array_len}; i++ )); do
-            if [[ "${targets[$i]}" == "bootstrap" ]];
+        for (( i=0; i<${targets_array_len}; i++ )); do
+            if [[ "${targets[$i]}" == "bootstrap" ]]; then
                 deck $FAB_PATH/bootstraps/$codename
             else
                 deck build/${targets[$((i - 1))]} build/${targets[$i]}
