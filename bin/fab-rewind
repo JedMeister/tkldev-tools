@@ -21,14 +21,33 @@ $(basename $0) TARGET
         root.build
         bootstrap
 
+    Env vars::
+
+        DEBUG       - set to 'y' for verbose output (set -x)
+        RELEASE     - distro and codename in use. E.g. debian/bullseye
+                      If unset, will fallback to CODENAME
+        CODENAME    - distro codename in use. If unset, will fall back to
+                      system codename (i.e. '$(lsb_release -sc)')
+
 EOF
     exit $exit_code
 }
 
 [[ "$DEBUG" != 'y' ]] || set -x
 
+codename="$(lsb_release -sc)"
+if [[ -n "$RELEASE" ]]; then
+    codename=$(basename $RELEASE)
+elif [[ -n "$CODENAME" ]]; then
+    codename=$CODENAME
+else
+    warn "CODENAME and RELEASE unset, using $codename"
+fi
+
+targets=("bootstrap" "root.build" "root.patched")
 target=$1
-[[ -n "$target" ]] || usage 1 "Target must be set."
+
+[[ ! " ${targets[*]} " =~ " ${target} " ]] || usage 1 "Only valid targets can be used."
 
 stop_services() {
     targ=$1
@@ -52,21 +71,40 @@ undeck() {
     rm -f build/stamps/$targ
 }
 
+mount_if_not_mounted() {
+    local target=${1}
+    if deck --ismounted $target; then
+        return
+    else
+        targets_array_len=${#targets[@]}
+        for (( i=0; i<${target_array_len}; i++ )); do
+            if [[ "${targets[$i]}" == "bootstrap" ]];
+                deck $FAB_PATH/bootstraps/$codename
+            else
+                deck build/${targets[$((i - 1))]} build/${targets[$i]}
+            fi
+        done
+     fi
+}
+
 case $target in
     root.patched)
         undeck cdroot
         undeck root.sandbox
+        mount_if_not_mounted $target
         ;;
     root.build)
         undeck cdroot
         undeck root.sandbox
         undeck root.patched
+        mount_if_not_mounted $target
         ;;
     bootstrap)
         undeck cdroot;
         undeck root.sandbox
         undeck root.patched
         undeck root.build
+        mount_if_not_mounted $target
         ;;
     help)
         usage 0
