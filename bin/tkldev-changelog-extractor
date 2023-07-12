@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+from argparse import ArgumentParser
+from subprocess import check_output
+from os.path import isfile
+import sys
+import re
+
+CHANGE_HEAD=r'^turnkey-.*-(\d+)\.(\d+)-?(?:rc|beta)? \((\d+)\) .*$'
+CHANGE_FOOTER=r' -- .*'
+
+def error(msg):
+    print('ERROR: ' + msg, file=sys.stderr)
+def warn(msg):
+    print('WARN: ' + msg, file=sys.stderr)
+
+def process_changelog(path):
+    if not isfile(path):
+        warn(f"changelog {path} does not exist!")
+        return {}
+    changes = {}
+    current_v = None
+    skip = False
+
+    with open(path, 'r') as fob:
+        for line in fob:
+            matched = re.match(CHANGE_HEAD, line)
+            if matched:
+                major, minor, rel = matched.groups()
+                if len(major) > 3:
+                    skip = True
+                    continue
+                v = (int(major), int(minor), int(rel))
+                if v in changes:
+                    warn(f"duplicate version: {v}, condensing duplicate entries")
+                    current_v = v
+                    continue
+                assert v not in changes
+                changes[v] = []
+                current_v = v
+                continue
+
+            matched = re.match(CHANGE_FOOTER, line)
+            if matched:
+                current_v = None
+                skip = False
+                continue
+
+            if skip:
+                continue
+
+            if not line.strip():
+                continue
+
+            assert current_v is not None
+            if line.startswith('  *'):
+                changes[current_v].append(line)
+            else:
+                changes[current_v][-1] += line
+    return changes
+
+if __name__ == '__main__':
+    parser = ArgumentParser(description='''
+    tool for extracting changelog entries from one or more "common" changelogs
+    without duplicates.
+
+    Given some "changelog" and one or more "common" changelogs, take entries
+    from each common changelog which are newer than some version "from", but not
+    in the primary changelog.
+
+    ''')
+    parser.add_argument('-f', '--from',
+            help='only process entries more recent than this version (defaults to release of this tkldev)',
+            default=None,
+            metavar='MAJOR[.MINOR[.RELEASE]]',
+            dest='from_v')
+    parser.add_argument('changelog',
+            help='the changelog you\'re extracting entries for')
+    parser.add_argument('common',
+            help='return entries from these changelogs, not present in the primary changelog',
+            nargs='+')
+
+    args = parser.parse_args()
+
+    if args.from_v is None:
+        from_v = check_output(['turnkey-version', '-t'], text=True).strip()
+        if from_v.endswith('beta'):
+            from_v = from_v[:-4]
+        elif from_v.endswith('rc'):
+            from_v = from_v[:-2]
+    else:
+        from_v = args.from_v
+    if '.' in from_v:
+        from_v = from_v.split('.')
+        from_v = (*from_v, '0', '0')
+        if len(from_v) > 3:
+            from_v = from_v[:3]
+        from_v = tuple(map(int, from_v))
+    else:
+        from_v = (int(from_v), 0, 0)
+
+    # parse the changelog changes
+    primary = process_changelog(args.changelog)
+    common = [process_changelog(path) for path in args.common]
+    common_keys = set()
+    for chlg in common:
+        common_keys |= chlg.keys()
+
+    # remove entries older than some version
+    for key in primary.keys() | common_keys:
+        maj, min, rel = key
+        if (int(maj), int(min), int(rel)) < from_v:
+            if key in primary:
+                del primary[key]
+            for chlg in common:
+                if key in chlg:
+                    del chlg[key]
+
+    #all_primary_changes = [v for v in changes for changes in primary.values()]
+    all_primary_changes = [v for changes in primary.values() for v in changes]
+
+    for chlg in common:
+        for key in chlg.keys():
+            for change in chlg[key]:
+                if change not in all_primary_changes:
+                    print(change)
+
+    # output different changes
+    #print(json.dumps(changes, indent=4))

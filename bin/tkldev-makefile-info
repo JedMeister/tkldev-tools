@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import json
+from argparse import ArgumentParser
+
+try:
+    from libtkldet import mkparser
+except ImportError:
+    print("tkldev-detective not installed (required for makefile parser)",
+        file=sys.stderr)
+    os.exit(1)
+    
+
+if __name__ == '__main__':
+    parser = ArgumentParser(description='''
+Tool for getting variables and includes from makefiles.
+
+Mostly specialized for turnkey usage (cuts corners that might cause issues in
+broader applications)
+''')
+    parser.add_argument('makefile', metavar='path/to/Makefile')
+
+    selection_group = parser.add_mutually_exclusive_group()
+    selection_group.add_argument('-a', '--all',
+        help='(default) show everything', action='store_true')
+    selection_group.add_argument('-v', '--var', nargs='?',
+        metavar='VARNAME', const=True,
+        help='show all variables or specific variable if specified')
+    selection_group.add_argument('-i', '--included',
+        help='show all included', action='store_true')
+
+    format_group = parser.add_mutually_exclusive_group()
+
+    format_group.add_argument('-s', '--shell', help='output in a shell friendly way')
+    format_group.add_argument('-j', '--json', help='output json')
+
+    parser.add_argument('-d', '--shell-delim', default=':',
+        help='delimiter to use with shell output')
+
+    args = parser.parse_args()
+
+    
+    if args.json:
+        def dump(v, prefix=None):
+            return json.dumps(v, indent=4)
+    else:
+        def dump(v, prefix=None):
+            no_prefix = prefix is None
+            if no_prefix:
+                prefix = []
+            out = []
+            if isinstance(v, dict):
+                for k, vs in v.items():
+                    out.extend(dump(vs, [*prefix, k]))
+            elif isinstance(v, list):
+                for v in v:
+                    out.extend(dump(v, prefix))
+            elif isinstance(v, str):
+                out.append(':'.join([*prefix, v]))
+            else:
+                raise TypeError(
+                    "don't know how to format {type(v)} in a shell friendly way")
+            if no_prefix:
+                return '\n'.join(out)
+            else:
+                return out
+
+    data = mkparser.parse_makefile(args.makefile).to_dict()
+
+    if args.var:
+        if isinstance(args.var, str):
+            if args.var in data['variables']:
+                print(dump(data['variables'][args.var]))
+            else:
+                print("variable not found", file=sys.stderr)
+        else:
+            print(dump(data['variables']))
+    elif args.included:
+        print(dump(data['included']))
+    else:
+        print(dump(data))

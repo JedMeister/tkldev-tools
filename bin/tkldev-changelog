@@ -58,7 +58,7 @@ Environment::
     EMAIL               - email address of operator (if DEBEMAIL not set)
     EXTRA_TEXT          - additional changelog points to include in new entry
                           if not set; then by default it will read from 
-                          "/turnkey/fab/products/common-changes"
+                          "/turnkey/fab/common/changes"
     DEVDEBUG            - turn on debugging
 
 Future plans:
@@ -79,26 +79,11 @@ which vim > /dev/null || fatal "vim not found; call yourself a developer?!?"
 [ -f changelog ] || fatal "no changelog in local dir"
 
 APP=$(basename $PWD)
-COMMON_CHANGES="${FAB_PATH}/products/common-changes"
-COMMON_CHANGE_CHECKS=("lapp.mk" "lamp.mk" "nodejs.mk")
+COMMON_CHANGES="${FAB_PATH}/common/changes"
+APP_CHANGELOGS="$(tkldev-makefile-info "$PWD/Makefile"  -i | grep '/turnkey/fab/common' | rev | cut -d '/' -f 1 | rev | sed -E "s|^(.*).mk$|/${FAB_PATH}/common/changes/\1.changelog|")"
 
 if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
-    EXTRA_TEXT=""
-    for change_check in ${COMMON_CHANGE_CHECKS[@]}; do
-        if grep -Fq "$change_check" Makefile; then
-            change_fn="${COMMON_CHANGES}/${change_check%.mk}"
-            if [ -f "$change_fn" ]; then
-                EXTRA_TEXT="${EXTRA_TEXT}$(cat "$change_fn")"$'\n\n'
-            else
-                echo "error: common change \"$change_fn\" not found!"
-                echo "Ignoring..."
-                #exit 1
-            fi
-        fi
-    done
-
-    EXTRA_TEXT+="$(cat "${COMMON_CHANGES}/base" 2>/dev/null)"$'\n' \
-        || true
+    EXTRA_TEXT="$(tkldev-changelog-extractor "$PWD/changelog" $APP_CHANGELOGS)"
 fi
 
 EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
