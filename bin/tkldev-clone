@@ -2,6 +2,49 @@
 
 fatal() { echo "FATAL: $@" >&2 ; exit 1 ; }
 
+ORIGIN=${ORIGIN:-JedMeister}
+TKL=${TKL:-turnkey}
+PROT=${PROT:-ssh}
+
+[[ -n "$FAB_PATH" ]] || fatal "FAB_PATH not set"
+
+usage() {
+    cat <<EOF
+Script to clone TurnKey appliance repos from GitHub and add your own remote
+(GittHub remote fork must exist). Optionally add additional remotes.
+
+$(basename $0) APP_NAME [REPO1[ REPO2, ...]] [-d|--dir DIR]
+
+Note: requires GitHub credentials already configured.
+
+Args::
+
+    APP_NAME    Appliance repo to clone.
+                - will fail if not given or app doesn't exist.
+
+Options::
+
+    REPO        Space separated of GitHub user names and/or TKL team members.
+                Only a few TKL team members are supported by default. If other
+                repos are included, must be GitHub user namerepo remote to add (optional).
+                Requires GH
+                Currently only supports a few, see code of this script to see
+                who.
+
+    -d|--dir    Directory to clone into.
+                - default $FAB_PATH/products
+
+Env vars::
+
+    ORIGIN      Remote name of 'origin' - currently: $ORIGIN
+    TKL         Repo
+
+TODO:
+    - include valid TKL_team_repos in help - currently requires GitHub username
+    - allow better configuration of repo names
+        -  is quite opinionated and this script needs to be tweaked
+            origin:
+
 conf() {
     case $1 in
         origin)
@@ -22,6 +65,9 @@ add_remote() {
     git remote add $name $remote
     git fetch $name
 }
+
+while [[ $# -gt 0 ]]; then
+
 
 app=${1} && shift || fatal "Needs at least one arg"
 
