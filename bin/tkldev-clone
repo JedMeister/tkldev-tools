@@ -71,9 +71,6 @@ add_remote() {
     git fetch $name
 }
 
-while [[ $# -gt 0 ]]; then
-
-
 app=${1} && shift || fatal "Needs at least one arg"
 
 git clone git@github.com:turnkeylinux-apps/${app}.git -o turnkey
