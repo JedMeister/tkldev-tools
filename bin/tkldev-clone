@@ -37,13 +37,18 @@ Options::
 Env vars::
 
     ORIGIN      Remote name of 'origin' - currently: $ORIGIN
-    TKL         Repo
+    TKL         Name of TurnKey repo - can be set to \$ORIGIN
 
 TODO:
-    - include valid TKL_team_repos in help - currently requires GitHub username
-    - allow better configuration of repo names
-        -  is quite opinionated and this script needs to be tweaked
-            origin:
+    - Provide separate config file - inc exisitng env vars. Set defaults there
+    - Support additional custom remotes (via config &/or switch &/or env
+      var)
+    - Document and/or display default TKL_team_repos
+    - Allow local alias for users, inc valid TKL_team_repos - currently
+      requires GitHub username
+
+EOF
+}
 
 conf() {
     case $1 in
